@@ -1,0 +1,436 @@
+# Changelog
+
+## tAge 1.5.0
+
+### Breaking changes
+
+- [`flag_outliers()`](https://gladyshev-lab.github.io/tAge/reference/flag_outliers.md)
+  replaces
+  [`remove_outliers()`](https://gladyshev-lab.github.io/tAge/reference/remove_outliers.md),
+  as `tage.pp.flag_outliers` does in the Python package, with the same
+  numbers. It flags, in the phenoData, samples whose log2(CPM + 1)
+  profile (genes with mean CPM \>= 10) is far from the median profile of
+  their stratum – robust z of `1 - r` above 5 – and leaves the removal
+  to the caller (`eset[, !eset$tage_outlier]`). `method = "pca_iqr"` is
+  the paper’s PC1/PC2 1.5-IQR rule on the same input. The removed
+  detectors ran PCA on log10(raw counts), where PC1 follows sequencing
+  depth; in strata of a dozen samples the 1.5-IQR rule removed normal
+  samples in most strata. `robustbase` is no longer suggested.
+
+- [`tage_module_heatmap()`](https://gladyshev-lab.github.io/tAge/reference/tage_module_heatmap.md)
+  and
+  [`load_module_functions()`](https://gladyshev-lab.github.io/tAge/reference/load_module_functions.md)
+  no longer default to the rodent module set: pass `module_set` (or
+  `module_functions`). A module colour names a different module in each
+  set – 7 of the 8 colours shared by the rodent and multispecies sets
+  differ, “blue” being Respiration/Mitochondrial translation in one and
+  Myogenesis/Muscle contraction in the other – so multispecies and human
+  module clocks were labelled with rodent functions whenever the
+  argument was left out. `module_functions = character(0)` labels the
+  rows by module name only.
+
+### Clock registry
+
+- The registry is the Zenodo record 22166800: the 60 composite clocks
+  and, new, the published module clocks.
+  [`list_module_clocks()`](https://gladyshev-lab.github.io/tAge/reference/list_module_clocks.md)
+  lists the 78 elastic net module clocks of the rodent and multispecies
+  sets (one per co-expression module plus `allmodulegenes`,
+  chronological and mortality, Scaled normalisation) with their
+  annotated function and the archive each set is published as.
+  [`download_clocks()`](https://gladyshev-lab.github.io/tAge/reference/download_clocks.md)
+  accepts its output: the archive is downloaded once, unpacked into
+  `dest_dir`, and `path` points inside it. Downloads are checked to be a
+  pickle or a zip archive. Module clocks are scaled like the composite
+  clock of the same outcome.
+
+- Module sets are named `"rodent"`, `"multispecies"` and `"human"`:
+  `load_module_functions(module_set = )` and
+  `tage_module_heatmap(module_set = )` replace the `version` /
+  `modules_version` arguments. The bundled annotation files are
+  `Module_to_function_map_<set>.csv`.
+
+- Bundled data files renamed: `Gene_list_rodent_clocks.txt` (the gene
+  list of the rodent clocks, read by
+  [`load_gene_list()`](https://gladyshev-lab.github.io/tAge/reference/load_gene_list.md))
+  and `metadata/Orthologs_monkey_to_mouse.csv`.
+
+### New features
+
+- [`predict_tAge()`](https://gladyshev-lab.github.io/tAge/reference/predict_tAge.md)
+  takes the clock table from
+  [`list_clocks()`](https://gladyshev-lab.github.io/tAge/reference/list_clocks.md)
+  /
+  [`list_module_clocks()`](https://gladyshev-lab.github.io/tAge/reference/list_module_clocks.md)
+  with a `path` column (e.g. from
+  [`download_clocks()`](https://gladyshev-lab.github.io/tAge/reference/download_clocks.md)):
+  every row is applied to the representation its `scaling` names and
+  gets a column named after the model file, the names the Python package
+  uses. A named list of paths still works; with several paths per
+  representation it used to fail with “‘length = 3’ in coercion to
+  ‘logical(1)’” and now names its columns by model file, while one path
+  per representation keeps the `<representation>_<mode>_tAge` names.
+  `mode` and `return_std` default to `NULL`: each model’s type comes
+  from the table, the registry or its file name, and Bayesian ridge
+  clocks keep their `_sd` column.
+  [`tAge_by_group()`](https://gladyshev-lab.github.io/tAge/reference/tAge_by_group.md)
+  follows.
+  [`predict_tAge_one()`](https://gladyshev-lab.github.io/tAge/reference/predict_tAge_one.md)
+  refuses more than one path with a clear message.
+
+### Bug fixes
+
+- [`tage_clock_forest()`](https://gladyshev-lab.github.io/tAge/reference/tage_clock_forest.md)
+  labels each axis with the unit of its clocks: from `units` keyed by
+  prediction column, else from the `"tage_units"` attribute
+  [`predict_tAge()`](https://gladyshev-lab.github.io/tAge/reference/predict_tAge.md)
+  sets (years for primates, percent with `normalized_age = "percent"`),
+  else from `units` keyed by outcome. `units` used to be ignored – the
+  defaults came first in the lookup, so
+  `units = c(Chronological = "years")` still printed “months” – and
+  every chronological axis read “months”, human data included. Without
+  any unit information a chronological axis now reads “age units”.
+
+- [`tage_adjust_covariates()`](https://gladyshev-lab.github.io/tAge/reference/tage_adjust_covariates.md)
+  gains `group_column`. With it, the covariate effects removed are those
+  of the model the statistics fit (`value ~ group + covariates`, one
+  model per stratum, `lm` or the weighted meta-regression), so the
+  difference between group means of the adjusted values is the tested
+  estimate. The covariate-only model, still the default, attributes part
+  of the group effect to covariates that are unevenly distributed across
+  groups (tested KO - WT 1.22, plotted 0.91 in an unbalanced example).
+  [`tage_boxplot()`](https://gladyshev-lab.github.io/tAge/reference/tage_boxplot.md)
+  passes its groups, so its covariate-adjusted points now show what its
+  brackets test.
+
+- [`aggregate_pseudobulk()`](https://gladyshev-lab.github.io/tAge/reference/aggregate_pseudobulk.md)
+  adds cells until a pseudobulk sample reaches `coverage_threshold` and
+  then starts the next one, as
+  [`aggregate_on_obs_columns()`](https://gladyshev-lab.github.io/tAge/reference/aggregate_on_obs_columns.md)
+  and the Python package do. It used to cut the cumulative read count at
+  multiples of the threshold, so the first sample and about half of the
+  others held fewer reads than the threshold, and a cell with more reads
+  than the threshold left empty samples (0 cells, 0 counts) behind. Both
+  functions gain `drop_incomplete` (as in Python) to drop the leftover
+  last sample, and share one implementation that sums with a sparse
+  indicator matrix.
+  [`aggregate_on_obs_columns()`](https://gladyshev-lab.github.io/tAge/reference/aggregate_on_obs_columns.md)
+  now respects `verbose`.
+
+- [`tAge_preprocessing()`](https://gladyshev-lab.github.io/tAge/reference/tAge_preprocessing.md)
+  refuses input that is not raw counts – missing, negative or
+  non-integer values (TPM, CPM, log data), with the tolerance the Python
+  package uses – and a `control_group_column` that does not exist or a
+  `control_group_label` that no sample carries; both used to fall back
+  to centring on all samples with a warning. A stratum of `split_by`
+  without reference samples is still centred on itself with a warning.
+  [`control_subtraction()`](https://gladyshev-lab.github.io/tAge/reference/control_subtraction.md)
+  refuses a column that does not exist.
+
+- [`map_genes()`](https://gladyshev-lab.github.io/tAge/reference/map_genes.md)
+  keeps Entrez IDs as text from integers when summing identifiers that
+  collapse onto one gene. Grouping on the numbers named round IDs in
+  scientific notation (rat 500000 became `"5e+05"`), so they matched
+  nothing in the ortholog table and were dropped; rat 500000 is the
+  ortholog of the clock gene 64945. Duplicates are summed with
+  [`rowsum()`](https://rdrr.io/r/base/rowsum.html).
+
+- The statistics leave out a categorical covariate that has a single
+  level in the data a model is fitted on (e.g. `Sex` in an all-male
+  stratum) instead of skipping the stratum on
+  [`lm()`](https://rdrr.io/r/stats/lm.html)’s “contrasts can be applied
+  only to factors with 2 or more levels”. The Python package already
+  fitted these strata; the two now agree.
+
+## tAge 1.4.0
+
+### New features
+
+- Species maximum lifespans are the values the clocks were trained with
+  (AnAge): rat 3.8 years (was 4.2) and human 122 years (was 122.5);
+  mouse 4 and macaque 39 years are unchanged. Chronological-age
+  predictions for rat samples are therefore ~10% lower than before,
+  human ones ~0.4%.
+
+- One figure style, shared with the Python package:
+  [`theme_tage()`](https://gladyshev-lab.github.io/tAge/reference/theme_tage.md),
+  the colour tokens in
+  [`tage_colors()`](https://gladyshev-lab.github.io/tAge/reference/tage_colors.md),
+  [`tage_series_colors()`](https://gladyshev-lab.github.io/tAge/reference/tage_series_colors.md)
+  for group colours (the reference group in neutral grey, comparisons in
+  colour-vision-safe slots) and
+  [`scale_fill_tage_diverging()`](https://gladyshev-lab.github.io/tAge/reference/scale_fill_tage_diverging.md)
+  for signed effects.
+  [`tage_boxplot()`](https://gladyshev-lab.github.io/tAge/reference/tage_boxplot.md),
+  [`tage_clock_forest()`](https://gladyshev-lab.github.io/tAge/reference/tage_clock_forest.md),
+  [`tage_module_heatmap()`](https://gladyshev-lab.github.io/tAge/reference/tage_module_heatmap.md),
+  the outlier PCA plot and
+  [`plot_eset_density()`](https://gladyshev-lab.github.io/tAge/reference/plot_eset_density.md)
+  all draw with it: left-aligned title with subtitle and caption,
+  recessive axes, one colour per clock outcome, blue-grey-red scale
+  centred on zero.
+  [`tage_boxplot()`](https://gladyshev-lab.github.io/tAge/reference/tage_boxplot.md)
+  gains `subtitle` and `caption`; its `theme_type` is deprecated.
+
+- `tAge_preprocessing(split_by = )` preprocesses each level of a
+  phenoData column (tissue, dataset, cell type) on its own – gene
+  filtering, normalisation and reference centring within the stratum, on
+  the stratum’s own controls – and combines the results. This is how the
+  clocks were trained and applied in the paper; a single reference
+  pooled across tissues mixes tissue differences into the signal.
+  [`tAge_by_group()`](https://gladyshev-lab.github.io/tAge/reference/tAge_by_group.md)
+  is now this plus
+  [`predict_tAge()`](https://gladyshev-lab.github.io/tAge/reference/predict_tAge.md),
+  and no longer swallows errors per stratum. The bulk vignette
+  preprocesses the two-tissue Klotho example this way, with the paper’s
+  25% gene-detection threshold.
+
+- Gene identifiers are detected: `gene_mapping_type = "auto"` (the new
+  default of
+  [`map_genes()`](https://gladyshev-lab.github.io/tAge/reference/map_genes.md)
+  and
+  [`tAge_preprocessing()`](https://gladyshev-lab.github.io/tAge/reference/tAge_preprocessing.md))
+  picks Ensembl, gene symbol or Entrez as the type with the most matches
+  in the species’ gene table; Ensembl version suffixes are stripped when
+  that is what makes the IDs match. Entrez input is new. Nothing
+  matching is an error that lists the match counts.
+
+- The species is recorded in the ExpressionSets returned by
+  [`tAge_preprocessing()`](https://gladyshev-lab.github.io/tAge/reference/tAge_preprocessing.md);
+  [`predict_tAge()`](https://gladyshev-lab.github.io/tAge/reference/predict_tAge.md)
+  /
+  [`predict_tAge_one()`](https://gladyshev-lab.github.io/tAge/reference/predict_tAge_one.md)
+  take it from there (`species = NULL`). `species` is documented as the
+  species of the samples, used only to rescale chronological-age clocks;
+  an unknown species is an error instead of a silent factor of 1.
+  [`tage_species()`](https://gladyshev-lab.github.io/tAge/reference/tage_species.md)
+  lists the supported species with their maximum lifespans and default
+  units.
+
+- [`predict_tAge()`](https://gladyshev-lab.github.io/tAge/reference/predict_tAge.md)
+  gains `age_units` (“auto”: months for rodents, years for primates; or
+  “months” / “years”) and `normalized_age` (“fraction”, the default, or
+  “percent” as in the paper and TACO). The result carries a
+  `"tage_units"` attribute naming the unit of every prediction column.
+  Clocks outside the registry are recognised from their file names
+  (Chronoage, Hazard / Mortality, Relage / NormalizedAge); unknown names
+  are left on the native scale with a warning.
+
+- `remove_outliers(method = )` adds the paper’s two rules next to the
+  Mahalanobis default: `"pca_iqr"` (PC1 or PC2 beyond 1.5 IQR, bulk
+  data) and `"spearman_median"` (Spearman correlation with the group’s
+  median profile below 0.5, meta-dataset).
+
+### Bug fixes
+
+- [`control_subtraction()`](https://gladyshev-lab.github.io/tAge/reference/control_subtraction.md)
+  warns when the requested control label matches no sample (it used to
+  fall back to all samples silently unless `verbose`).
+
+### Housekeeping
+
+- The Python bridge no longer silences every `UserWarning` for the whole
+  session; the scikit-learn version warning is suppressed around the
+  model load only.
+- Base-package functions are imported explicitly (`R CMD check` NOTEs);
+  [`tage_boxplot()`](https://gladyshev-lab.github.io/tAge/reference/tage_boxplot.md)
+  no longer calls [`library()`](https://rdrr.io/r/base/library.html).
+  `png` and `robustbase` are listed in Suggests. The test helper
+  downloads models through
+  [`download_clocks()`](https://gladyshev-lab.github.io/tAge/reference/download_clocks.md).
+- [`tage_boxplot()`](https://gladyshev-lab.github.io/tAge/reference/tage_boxplot.md)
+  needs `ggpubr` only for the bracket layer it draws with it; the
+  pkgdown workflow installs it for the vignettes.
+- [`download_clocks()`](https://gladyshev-lab.github.io/tAge/reference/download_clocks.md)
+  writes to `<file>.part` and renames only once the transfer is complete
+  and checked, so an interrupted session cannot leave a truncated model
+  under the real name. Non-ASCII characters in R sources are written as
+  `\u` escapes (`R CMD check` warning).
+
+## tAge 1.3.1
+
+### Bug fixes
+
+- `map_genes(species = "monkey")` failed on every input with “subscript
+  out of bounds”: macaque genes without a mouse ortholog were looked up
+  with `[[`. Mapping is now vectorised and drops those genes, as for the
+  other species.
+
+- `tage_clock_forest(clocks_meta = list_clocks(...))` could not find the
+  prediction columns:
+  [`predict_tAge()`](https://gladyshev-lab.github.io/tAge/reference/predict_tAge.md)
+  names them `<normalisation>_<mode>_tAge`, not by model file. Registry
+  rows are now matched through `scaling` and `type` (Scaled + EN -\>
+  `scaled_diff_EN_tAge`), labelled from the registry fields when there
+  is no `name` column, and the registry’s “Normalized age” outcome is
+  recognised. Two rows landing on one column is an error with an
+  explanation.
+
+- [`tage_adjust_covariates()`](https://gladyshev-lab.github.io/tAge/reference/tage_adjust_covariates.md)
+  with a Bayesian ridge `se_column` and no `split_by` returned
+  zero-centred residuals; the values are now put back on the tAge scale
+  like every other branch.
+
+- [`tage_compare_groups()`](https://gladyshev-lab.github.io/tAge/reference/tage_compare_groups.md),
+  [`tage_regress_continuous()`](https://gladyshev-lab.github.io/tAge/reference/tage_regress_continuous.md),
+  [`tage_module_stats()`](https://gladyshev-lab.github.io/tAge/reference/tage_module_stats.md)
+  and
+  [`tage_adjust_covariates()`](https://gladyshev-lab.github.io/tAge/reference/tage_adjust_covariates.md)
+  no longer drop a stratum in silence. Every skipped clock/stratum is
+  reported with a warning naming it and the reason (reference group
+  absent, fewer than two groups, collinear covariates, a failed `lm` /
+  `rma.uni` fit, …).
+
+- [`download_clocks()`](https://gladyshev-lab.github.io/tAge/reference/download_clocks.md)
+  raises R’s download timeout while it runs (new `timeout` argument,
+  default 3600 s; the default 60 s aborted every Bayesian ridge model,
+  0.9-2.4 GB each), removes partial files instead of leaving them to be
+  reported as “already present”, and rejects files that are not pickles
+  (Zenodo error pages).
+
+- Normalized-age panels of
+  [`tage_clock_forest()`](https://gladyshev-lab.github.io/tAge/reference/tage_clock_forest.md)
+  are labelled “fraction of maximum lifespan”, the scale the package
+  actually returns.
+
+## tAge 1.3.0
+
+### New features
+
+- Two publication-style figures built directly on the statistics, so a
+  figure and the table behind it cannot drift apart:
+  [`tage_clock_forest()`](https://gladyshev-lab.github.io/tAge/reference/tage_clock_forest.md)
+  draws one clock per row with its confidence interval, filled when it
+  survives the multiplicity correction;
+  [`tage_module_heatmap()`](https://gladyshev-lab.github.io/tAge/reference/tage_module_heatmap.md)
+  draws module effects as modules × strata with a star per significant
+  cell. Both return the statistics as the `"tage_stats"` attribute, and
+  both accept a precomputed table via `stats =`.
+  [`load_module_functions()`](https://gladyshev-lab.github.io/tAge/reference/load_module_functions.md)
+  reads the bundled module-to-function annotation used for the row
+  labels.
+
+- The statistics gain `ci_low` / `ci_high` and a `conf_level` argument.
+  The critical value follows the test: normal for the Bayesian ridge
+  meta-regression, t otherwise.
+
+- Statistical tests matching the TACO / tClock reference application:
+  [`tage_compare_groups()`](https://gladyshev-lab.github.io/tAge/reference/tage_compare_groups.md)
+  for marginal-mean contrasts between groups,
+  [`tage_regress_continuous()`](https://gladyshev-lab.github.io/tAge/reference/tage_regress_continuous.md)
+  for slopes against a numeric predictor,
+  [`tage_module_stats()`](https://gladyshev-lab.github.io/tAge/reference/tage_module_stats.md)
+  for module-clock heatmaps,
+  [`tage_adjust_covariates()`](https://gladyshev-lab.github.io/tAge/reference/tage_adjust_covariates.md)
+  for the matching plotting values, and
+  [`tage_significance_stars()`](https://gladyshev-lab.github.io/tAge/reference/tage_significance_stars.md)
+  for the `*** ** * ^` labels. Elastic net clocks use `lm` + `emmeans`;
+  Bayesian ridge clocks use
+  [`metafor::rma.uni`](https://wviechtb.github.io/metafor/reference/rma.uni.html)
+  weighted by the per-sample prediction standard deviation, reporting
+  z-tests. `emmeans` and `metafor` are new imports.
+
+- [`predict_tAge()`](https://gladyshev-lab.github.io/tAge/reference/predict_tAge.md)
+  and
+  [`predict_tAge_one()`](https://gladyshev-lab.github.io/tAge/reference/predict_tAge_one.md)
+  gain `return_std`, on by default for `mode = "BR"`, adding a
+  `<normalisation>_BR_tAge_sd` column. These are the weights the
+  Bayesian ridge tests need, and were previously discarded.
+
+- [`tage_boxplot()`](https://gladyshev-lab.github.io/tAge/reference/tage_boxplot.md)
+  defaults to `stat_method = "emmeans"`, annotating brackets from
+  [`tage_compare_groups()`](https://gladyshev-lab.github.io/tAge/reference/tage_compare_groups.md)
+  and supporting covariates, per-stratum models and Bayesian ridge
+  weighting. Passing any other `stat_method` keeps the previous
+  [`ggpubr::stat_compare_means()`](https://rpkgs.datanovia.com/ggpubr/reference/stat_compare_means.html)
+  behaviour.
+
+### Bug fixes
+
+- The predictive standard deviation of chronological-age clocks is now
+  rescaled by the species maximum lifespan along with the prediction
+  itself. It was left on the normalised scale, which would have made
+  meta-regression weights wrong by the square of the species factor.
+
+## tAge 1.1.0
+
+Corrects three bugs that produced **wrong predictions** in 1.0.0 /
+1.0.1. Analyses run with those versions should be repeated with 1.1.0.
+
+### Bug fixes
+
+- Species rescaling is now applied **only to chronological-age clocks**.
+  Previously every prediction was multiplied by the species
+  maximum-lifespan factor, which turned mortality output (`log10` hazard
+  ratio) and normalized-age output into meaningless numbers. The clock
+  type is taken from the model file name, matching the TACO reference
+  application.
+
+- Reference centring is **never skipped**.
+  [`control_subtraction()`](https://gladyshev-lab.github.io/tAge/reference/control_subtraction.md)
+  used to return the data unchanged when no reference group was given.
+  All distributed clocks are relative (`_scaleddiff` / `_yugenediff`)
+  models trained on reference-centred expression, so predictions made
+  without centring were invalid. `column_name` and `control_label` now
+  default to `NULL`, which centres on all samples (overall per-gene
+  median) — the TACO default.
+
+- Genes absent from the input are padded with `NA` instead of `0` when
+  aligning to the clock gene list. The trained model’s imputer then
+  fills them with the training-set median for that gene, which is the
+  correct neutral value.
+
+- [`predict_tAge()`](https://gladyshev-lab.github.io/tAge/reference/predict_tAge.md)
+  coerces the reticulate result to a `data.frame`, fixing a failure on
+  reticulate/pandas versions that return a bare vector for a
+  single-column result.
+
+- [`tage_boxplot()`](https://gladyshev-lab.github.io/tAge/reference/tage_boxplot.md)
+  is exported.
+
+### New features
+
+- Clock registry:
+  [`list_clocks()`](https://gladyshev-lab.github.io/tAge/reference/list_clocks.md)
+  browses the pre-trained models (filter by type, outcome, species,
+  tissue and scaling) and
+  [`download_clocks()`](https://gladyshev-lab.github.io/tAge/reference/download_clocks.md)
+  fetches them from Zenodo record 18763485, returning the table with a
+  `path` column. The registry ships with the package as
+  `inst/extdata/clocks_metadata.csv`.
+
+### Documentation
+
+- Two vignettes replace the former Jupyter notebooks:
+  [`vignette("tage-bulk")`](https://gladyshev-lab.github.io/tAge/articles/tage-bulk.md)
+  for bulk RNA-seq and
+  [`vignette("tage-singlecell")`](https://gladyshev-lab.github.io/tAge/articles/tage-singlecell.md)
+  for the pseudobulk single-cell workflow.
+
+- pkgdown site at <https://gladyshev-lab.github.io/tAge/>.
+
+- README rewritten: units of each clock outcome, the role of reference
+  groups in relative clocks, supported species, and licensing.
+
+- [`scale_eset()`](https://gladyshev-lab.github.io/tAge/reference/scale_eset.md)
+  documents that scaling is **per sample** (column-wise, each sample
+  scaled across genes). Per-gene standardisation happens separately
+  inside the trained model, using training-set statistics.
+
+### Testing
+
+- `testthat` suite covering the clock registry, prediction and
+  preprocessing.
+
+## tAge 1.0.1
+
+- README and LICENSE updated for the MGB Open Access License 1.0.
+- Model availability notice and placeholder paths corrected in the
+  tutorials.
+
+## tAge 1.0.0
+
+- First release, accompanying [Tyshkovskiy et al. (2026),
+  *Nature*](https://doi.org/10.1038/s41586-026-10542-3).
+- Superseded by 1.1.0 — see the bug fixes above before using any results
+  from this version.
